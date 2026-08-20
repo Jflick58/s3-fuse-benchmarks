@@ -7,6 +7,7 @@ frame is available, then seek behaviour, concurrency, and metadata.
 
 import concurrent.futures
 import os
+import shutil
 import random
 import statistics
 import subprocess
@@ -35,6 +36,46 @@ def _read_stream(path, max_bytes=None, chunk=CHUNK):
                 break
             total += len(block)
     return total
+
+
+def _object_size(bucket, key):
+    out = subprocess.run(["s5cmd", "ls", f"s3://{bucket}/{key}"],
+                         capture_output=True, text=True)
+    for field in reversed(out.stdout.split()):
+        if field.isdigit():
+            return int(field)
+    return 0
+
+
+def _ensure_space(client, mount_dir, key, bucket):
+    """Make room on the instance store before staging another object.
+
+    The prod corpus is larger than the instance store on smaller node types, so
+    without this the copy baseline fills the disk partway through a run and
+    every later measurement fails for a reason that looks like a client bug.
+    Previously staged files are evicted first; their recorded copy costs stay
+    valid because each was measured when it was actually downloaded.
+    """
+    need = _object_size(bucket, key)
+    if not need:
+        return
+    free = shutil.disk_usage(mount_dir).free
+    if free > need * 1.1:
+        return
+
+    for stale in sorted(os.listdir(mount_dir)):
+        path = os.path.join(mount_dir, stale)
+        if os.path.isfile(path) and os.path.basename(key) != stale:
+            os.unlink(path)
+            if shutil.disk_usage(mount_dir).free > need * 1.1:
+                return
+
+    free = shutil.disk_usage(mount_dir).free
+    if free <= need * 1.1:
+        raise RuntimeError(
+            f"instance store has {free/1e9:.0f} GB free but staging "
+            f"{os.path.basename(key)} needs {need/1e9:.0f} GB. Use a node type "
+            f"with a larger instance store, or a smaller corpus profile.")
 
 
 def _rate(nbytes, seconds):
@@ -66,6 +107,8 @@ def materialize(client, bucket, key, mount_dir):
     if os.path.exists(dst) and key in client._copy_cost:
         secs, nbytes = client._copy_cost[key]
         return dst, secs, nbytes
+
+    _ensure_space(client, mount_dir, key, bucket)
     t0 = time.monotonic()
     proc = subprocess.run(
         ["s5cmd", "--numworkers", "64", "cp", "-c", "32", "-p", "32",
@@ -193,6 +236,14 @@ def parallel_read(client, ctx, keys):
     streams = min(ctx.params["parallel_streams"], len(keys))
     if streams < 2:
         return {"skipped": "needs at least 2 corpus files"}
+    if client.kind == C.COPY:
+        # Release whatever the earlier workloads staged; this workload needs
+        # room for several files at once.
+        for stale in os.listdir(ctx.mount_dir):
+            path = os.path.join(ctx.mount_dir, stale)
+            if os.path.isfile(path):
+                os.unlink(path)
+        client._copy_cost = {}
     per_stream = max(ctx.params["seq_max_bytes"] // streams, 256 * 1024 * 1024)
 
     def one(k):

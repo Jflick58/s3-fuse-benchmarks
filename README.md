@@ -67,6 +67,21 @@ Narrow to specific clients while iterating:
 make bench CLIENTS=mountpoint,s3fs
 ```
 
+## How long a run takes
+
+| Profile | Corpus | Runtime | Cost |
+|---|---|---|---|
+| `dev` | ~14 GB | 20-35 min | ~$0.30 |
+| `prod` | ~220 GB | 1.5-2.5 hr | ~$1.60 |
+
+Most of the `prod` runtime is spent on the slow clients: `s3fs-default` reading
+20 GiB three times takes far longer than everything else combined. Once you
+know the shape of the results, narrow the field:
+
+```bash
+make bench RUN_PROFILE=prod CLIENTS=mountpoint-tuned,geesefs-tuned,local-nvme
+```
+
 ## Cost
 
 | Component | $/hr |

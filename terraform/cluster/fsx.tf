@@ -65,6 +65,9 @@ resource "aws_fsx_lustre_file_system" "this" {
   subnet_ids         = [aws_subnet.public[0].id]
   security_group_ids = [aws_security_group.fsx[0].id]
   deployment_type    = "SCRATCH_2"
+  # Data repository associations require Lustre 2.12 or newer; the provider
+  # default for SCRATCH_2 is older, which would fail the association below.
+  file_system_type_version = "2.15"
 
   tags = { Name = "${var.name_prefix}" }
 }

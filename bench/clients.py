@@ -101,7 +101,9 @@ def build_catalogue(bucket: str, region: str) -> List[Client]:
                "Maintained successor to goofys."),
         Client("geesefs-tuned", "geesefs", "tuned", FUSE, geesefs([
                    "--memory-limit", "4096",
-                   "--read-ahead-large", "102400",
+                   # GeeseFS expresses read-ahead in KB; the default large-file
+                   # window is 100 MB, so this doubles it to 200 MB.
+                   "--read-ahead-large", "204800",
                    "--stat-cache-ttl", "15m",
                ]),
                "GeeseFS with a large read-ahead window."),

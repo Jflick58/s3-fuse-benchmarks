@@ -1,0 +1,95 @@
+#!/bin/bash
+# Node bootstrap for the S3 filesystem benchmark.
+# Runs alongside (not instead of) the nodeadm NodeConfig that EKS appends.
+set -x
+exec > >(tee /var/log/bench-bootstrap.log) 2>&1
+
+STATUS=/run/bench-node-status
+: > "$STATUS"
+note() { echo "$1" >> "$STATUS"; }
+
+# ---------------------------------------------------------------------------
+# 1. Instance-store NVMe at /mnt/nvme
+# ---------------------------------------------------------------------------
+# Needed by two things: the "copy to local disk first" candidate, and the
+# on-disk caches of the FUSE clients that have one. Backing either with EBS
+# would measure EBS, not the S3 path.
+setup_nvme() {
+  local root_disk devs count
+  root_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" 2>/dev/null | head -1)
+  mapfile -t devs < <(lsblk -dn -o NAME,TYPE | awk '$2=="disk"{print $1}' | grep -v "^$${root_disk}$")
+  count=$${#devs[@]}
+
+  if [ "$count" -eq 0 ]; then
+    note "nvme=absent"
+    mkdir -p /mnt/nvme
+    return 0
+  fi
+
+  local target
+  if [ "$count" -eq 1 ]; then
+    target="/dev/$${devs[0]}"
+  else
+    # Stripe multi-disk instances so the local-copy baseline is not limited by
+    # a single device when the network can outrun it.
+    local paths=()
+    for d in "$${devs[@]}"; do paths+=("/dev/$d"); done
+    mdadm --create /dev/md0 --level=0 --raid-devices="$count" "$${paths[@]}" --force
+    target=/dev/md0
+  fi
+
+  mkfs.xfs -f "$target"
+  mkdir -p /mnt/nvme
+  mount -o noatime,nodiscard "$target" /mnt/nvme
+  chmod 1777 /mnt/nvme
+  note "nvme=$target count=$count"
+}
+setup_nvme || note "nvme=failed"
+
+%{ if sysctl_tuning ~}
+# ---------------------------------------------------------------------------
+# 2. Optional host TCP tuning (opt-in; recorded in run metadata)
+# ---------------------------------------------------------------------------
+cat > /etc/sysctl.d/99-bench.conf <<'SYSCTL'
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+net.ipv4.tcp_rmem = 4096 87380 134217728
+net.ipv4.tcp_wmem = 4096 65536 134217728
+net.core.netdev_max_backlog = 30000
+SYSCTL
+sysctl --system
+note "sysctl_tuning=on"
+%{ else ~}
+note "sysctl_tuning=off"
+%{ endif ~}
+
+%{ if lustre_dns != "" ~}
+# ---------------------------------------------------------------------------
+# 3. FSx for Lustre
+# ---------------------------------------------------------------------------
+# Mounted on the host rather than inside the benchmark pod: the Lustre client
+# is a kernel module plus a mount helper that is supported on AL2023 and not
+# in a generic container image. The pod reads it through a hostPath, which is
+# also how the FSx CSI driver would ultimately present it.
+setup_lustre() {
+  dnf install -y lustre-client || return 1
+  mkdir -p /mnt/lustre
+  # FSx can still be provisioning when the node boots.
+  for attempt in $(seq 1 30); do
+    if mount -t lustre -o noatime,flock \
+        "${lustre_dns}@tcp:/${lustre_mount_name}" /mnt/lustre; then
+      chmod 1777 /mnt/lustre
+      note "lustre=mounted"
+      return 0
+    fi
+    echo "lustre mount attempt $attempt failed; retrying in 20s"
+    sleep 20
+  done
+  return 1
+}
+setup_lustre || note "lustre=failed"
+%{ else ~}
+note "lustre=disabled"
+%{ endif ~}
+
+note "bootstrap=complete"

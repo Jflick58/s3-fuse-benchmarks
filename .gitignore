@@ -1,0 +1,14 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+*.tfvars.local
+kubeconfig
+results/*.jsonl
+results/*.md
+results/*.html
+!results/.gitkeep
+__pycache__/
+*.pyc
+.env.local

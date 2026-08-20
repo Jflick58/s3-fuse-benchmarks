@@ -67,7 +67,13 @@ def build_catalogue(bucket: str, region: str) -> List[Client]:
 
     def geesefs(extra):
         def f(mnt, cache):
-            return ["geesefs", "-f", "--region", region] + extra + [bucket, mnt]
+            # GeeseFS is a Yandex Cloud fork and defaults its endpoint to
+            # storage.yandexcloud.net. Without an explicit AWS endpoint it
+            # fails bucket access, silently falls back to the SigV2 signer,
+            # and S3 rejects the request with 403.
+            return ["geesefs", "-f",
+                    "--region", region,
+                    "--endpoint", _region_url(region)] + extra + [bucket, mnt]
         return f
 
     def rclone(extra):

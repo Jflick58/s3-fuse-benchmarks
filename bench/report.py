@@ -147,6 +147,18 @@ def build(path):
                  for k in sorted(stats, key=lambda x: -(stats.get(x) or 0))]))
         a("")
 
+    # A random-read workload that moved far less over the wire than it claimed
+    # to read was served from page cache, not from S3. That happens when the
+    # test file is smaller than node RAM and a client prefetches it wholesale,
+    # and it makes that client's seek latency look impossibly good.
+    cached = []
+    for r in rows:
+        rs = r.get("random_seek") or {}
+        want = (rs.get("reads") or 0) * (rs.get("read_size_bytes") or 0)
+        got = rs.get("nic_rx_bytes")
+        if want and got is not None and got < want * 0.5:
+            cached.append((r["client"], r["rep"], got, want, rs.get("p50_ms")))
+
     # Validity warnings are part of the report, not a footnote: a throughput
     # number taken while the instance was throttled is not a throughput number.
     warnings = []
@@ -157,6 +169,16 @@ def build(path):
                 warnings.append(f"`{r['client']}` rep{r['rep']} {wl}: "
                                 f"{counter} +{delta}")
     a("## Validity checks\n")
+    if cached:
+        a("**Some random-seek measurements were served from page cache, not S3.** "
+          "These clients moved far fewer bytes over the network than they read, "
+          "which means the test file fit in node RAM and was prefetched. Their "
+          "seek latencies below are not S3 latencies. Use the `prod` corpus, "
+          "whose files are larger than RAM, for trustworthy seek numbers.\n")
+        a(table(["client", "rep", "read (MB)", "over network (MB)", "reported p50 ms"],
+                [[c, rep, round(want/1e6), round(got/1e6), p50]
+                 for c, rep, got, want, p50 in cached[:20]]))
+        a("")
     if warnings:
         a("**Network allowance was exceeded during these measurements.** The "
           "instance hit an EC2 network limit, so the affected numbers describe "

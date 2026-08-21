@@ -98,14 +98,19 @@ def build(path):
 
     a("## Headline: bulk sequential read\n")
     a("The number that matters for pulling hour-long files onto a node. "
-      "`effective` charges the copy-based baseline for its download, which is "
-      "the honest comparison against a mount that streams while you read.\n")
+      "Rows are ranked on **end-to-end MB/s**, the rightmost throughput column.\n")
+    a("For mount-based clients the two throughput columns are the same number. "
+      "For the copy-based baseline they are not, and the difference matters: "
+      "its raw read is a **local SSD** read of a file that has already been "
+      "downloaded, so it is not an S3 measurement at all and must not be "
+      "compared against a mount. Such rows are marked `(local disk)`, and their "
+      "end-to-end figure charges both the download and the read.\n")
     a(table(
-        ["client", "MB/s", "Gbit/s", "effective MB/s", "% of best", "CPU cores"],
+        ["client", "raw read MB/s", "end-to-end MB/s", "Gbit/s", "% of best", "CPU cores"],
         [[k,
-          seq.get(k, "-"),
-          round((seq[k] * 8 / 1000), 2) if seq.get(k) else "-",
-          eff.get(k, "-"),
+          f"{seq[k]} (local disk)" if (k in eff and eff.get(k)) else seq.get(k, "-"),
+          round(endtoend(k), 1) if endtoend(k) else "-",
+          round(endtoend(k) * 8 / 1000, 2) if endtoend(k) else "-",
           f"{100*endtoend(k)/best:.0f}%" if best else "-",
           cpu.get(k, "-")] for k in order]))
     a("")

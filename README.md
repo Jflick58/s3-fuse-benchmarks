@@ -49,11 +49,11 @@ Drop s3fs and rclone. rclone does 66 MB/s and 80 `stat`/s.
 | rclone-tuned | 100 | 144 | 370 | 1.1 | 261 | 80 |
 | rclone-default | 66 | 140 | 380 | 1.0 | 266 | 82 |
 
-**Read the ceiling before you read the ranking.** The top three all converge at 1320–1362 MB/s
-(~10.6 Gbit/s) because that's this instance's network limit, and `bw_in_allowance_exceeded` fires
-during those runs. Gaps *among the fast clients* are compressed and are not a real ranking. The
-slow ones are nowhere near the ceiling, so those numbers stand. To separate the top three you need
-a sustained-bandwidth instance:
+**Read the ceiling before you read the ranking.** Best observed on this node is 1415 MB/s
+(11.3 Gbit/s), and `bw_in_allowance_exceeded` fires hard during the fast runs (216,714 on one).
+So the top three converging at 1320–1415 MB/s is the instance's network limit, not theirs. Gaps
+*among the fast clients* are compressed and are not a real ranking. The slow ones are nowhere near
+it, so those numbers stand. To separate the top three you need a sustained-bandwidth instance:
 
 ```bash
 make up NODE_TYPE=m5dn.8xlarge   # 25 Gbps sustained -- needs the 32 vCPU quota
@@ -91,8 +91,12 @@ hitting 645 on 2.2.
 
 - **Small test files lie.** On 5 GB files the corpus fits in 32 GB of RAM. s3fs "tuning" looked
   like 3.6x; on 100 GB files it's 1.3x. local-nvme looked like 958 MB/s; on real files it's 184
-  because you hit NVMe *write* bandwidth (~250 MB/s), not S3. The harness now flags reads served
+  because you hit NVMe *write* bandwidth (276 MB/s), not S3. The harness now flags reads served
   from page cache by comparing bytes read against NIC bytes.
+- **The copy baseline's rate is not an S3 ceiling.** I reported it as one and it was nonsense:
+  276 MB/s is instance-store *write* speed, and six mount configs beat it precisely because a mount
+  never writes the object to disk. The ceiling now comes from the fastest throughput actually
+  observed, corroborated against the ENA allowance counters.
 - **Don't compare local-nvme's raw read to a mount.** 6.8 GB/s is an SSD read of a file that
   already landed. Its honest number is end-to-end; its `copy_mb_s` is the real S3 ceiling.
 - **GeeseFS is a Yandex fork.** Defaults to `storage.yandexcloud.net`, 403s against AWS, falls

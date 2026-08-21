@@ -25,7 +25,10 @@ For mount-based clients the two throughput columns are the same number. For the 
 | rclone-tuned       | 99.5               | 99.5            | 0.8    | 8%        | 0.6       |
 | rclone-default     | 66.1               | 66.1            | 0.53   | 5%        | 0.4       |
 
-Raw parallel-GET ceiling measured on this instance: **276 MB/s (2.2 Gbit/s)**. Treat that as what the hardware can do; a mount's gap to it is the cost of the filesystem layer.
+Highest throughput observed on this instance: **1415 MB/s (11.3 Gbit/s)**, by `geesefs-default` on parallel read. Since the network allowance counters below move during the fastest runs, treat that as the instance's network limit rather than any client's limit.
+
+For contrast, the copy baseline moved S3 to instance-store at **276 MB/s**. That is not an S3 ceiling: at a 107 GB object it is bounded by whichever of S3, page cache and instance-store write is slowest -- on this class of instance, writes to the instance store usually bind first once the object exceeds RAM. 6 mount configurations beat it, because a mount never writes the object to disk.
+
 
 ## Time to first bytes
 

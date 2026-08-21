@@ -115,11 +115,59 @@ def build(path):
           cpu.get(k, "-")] for k in order]))
     a("")
 
+    # What the instance can actually do, taken from the fastest thing observed
+    # rather than from the copy baseline.
+    #
+    # The copy baseline's rate is NOT a ceiling. It is S3 -> instance-store
+    # write, and on a file larger than RAM the instance store's write bandwidth
+    # is the binding constraint, not S3. Mounts routinely beat it because they
+    # never write to disk at all -- they stream into page cache and on to the
+    # reading process. Reporting it as a ceiling made every mount look like it
+    # had exceeded the hardware, which is how this bug was spotted.
+    observed = []
+    for r in rows:
+        if r.get("kind") == "copy":
+            continue
+        for wl, fld in (("seq_read", "read_mb_s"), ("parallel_read", "aggregate_mb_s")):
+            v = (r.get(wl) or {}).get(fld)
+            if isinstance(v, (int, float)):
+                observed.append((v, r["client"], wl))
+    if observed:
+        top, who, how = max(observed)
+        a(f"Highest throughput observed on this instance: **{top:.0f} MB/s "
+          f"({top*8/1000:.1f} Gbit/s)**, by `{who}` on {how.replace('_', ' ')}. "
+          f"Since the network allowance counters below move during the fastest "
+          f"runs, treat that as the instance's network limit rather than any "
+          f"client's limit.\n")
+
     if ceiling:
-        top = max(v for v in ceiling.values() if v)
-        a(f"Raw parallel-GET ceiling measured on this instance: **{top:.0f} MB/s "
-          f"({top*8/1000:.1f} Gbit/s)**. Treat that as what the hardware can do; "
-          f"a mount's gap to it is the cost of the filesystem layer.\n")
+        disk = max(v for v in ceiling.values() if v)
+        faster = [c for c, v in seq.items() if v and v > disk]
+        cbytes = med(collect(rows, "seq_read", "copy_bytes").values()) \
+            if collect(rows, "seq_read", "copy_bytes") else None
+        mem = meta.get("mem_total_bytes")
+        if mem and cbytes and cbytes < mem * 0.8:
+            why = ("the object was smaller than this node's %.0f GB of RAM, so "
+                   "page cache absorbed the write and this is really an "
+                   "S3-to-memory rate. It will not hold on files larger than "
+                   "memory." % (mem / 1e9))
+        elif mem and cbytes:
+            why = ("the object was larger than this node's %.0f GB of RAM, so "
+                   "the instance store's write bandwidth binds first." % (mem / 1e9))
+        elif cbytes:
+            why = ("at a %.0f GB object it is bounded by whichever of S3, page "
+                   "cache and instance-store write is slowest -- on this class "
+                   "of instance, writes to the instance store usually bind "
+                   "first once the object exceeds RAM." % (cbytes / 1e9))
+        else:
+            why = ("it is bounded by whichever of S3, page cache and "
+                   "instance-store write is slowest at the object size used.")
+        plural = "configuration" if len(faster) == 1 else "configurations"
+        a(f"For contrast, the copy baseline moved S3 to instance-store at "
+          f"**{disk:.0f} MB/s**. That is not an S3 ceiling: {why}"
+          + (f" {len(faster)} mount {plural} beat it, because a mount never "
+             f"writes the object to disk.\n" if faster else "\n"))
+    a("")
 
     a("## Time to first bytes\n")
     a("Latency to start decoding. A client can win on throughput and still be "

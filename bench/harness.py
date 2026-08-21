@@ -66,6 +66,10 @@ def run_metadata(args, manifest):
         "availability_zone": imds("placement/availability-zone"),
         "kernel": platform.release(),
         "cpu_count": os.cpu_count(),
+        # Needed to interpret the copy baseline: an object smaller than RAM is
+        # absorbed by page cache, so its "copy" rate is S3-to-memory and does
+        # not survive to files larger than memory.
+        "mem_total_bytes": _mem_total(),
         "iface": iface,
         # Recorded because they change results and are easy to forget about.
         "sysctl": {
@@ -81,6 +85,17 @@ def run_metadata(args, manifest):
         },
         "ena_counters_at_start": ena_allowance_counters(iface),
     }
+
+
+def _mem_total():
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemTotal:"):
+                    return int(line.split()[1]) * 1024
+    except OSError:
+        pass
+    return None
 
 
 def _read_sysctl(name):

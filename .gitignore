@@ -5,10 +5,8 @@
 crash.log
 *.tfvars.local
 kubeconfig
-results/*.jsonl
-results/*.md
-results/*.html
-!results/.gitkeep
+# Results are the deliverable and are small (~25 KB), so they are tracked.
+# The README links to results/prod.md.
 __pycache__/
 *.pyc
 .env.local

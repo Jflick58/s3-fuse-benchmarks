@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="392" viewBox="0 0 780 392" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<text x="14" y="26" font-size="15" font-weight="600" fill="#8b949e">Sequential read throughput</text>
+<text x="14" y="44" font-size="11.5" fill="#8b949e">MB/s, median of 3 reps, 100 GB file</text>
+<text x="180" y="73" font-size="12" text-anchor="end" fill="#8b949e">mountpoint-default</text>
+<rect x="190" y="61" width="500.0" height="18" rx="3" fill="#2f81f7"/>
+<text x="698.0" y="74" font-size="12" fill="#8b949e">1,320</text>
+<text x="180" y="103" font-size="12" text-anchor="end" fill="#8b949e">mountpoint-tuned</text>
+<rect x="190" y="91" width="459.8" height="18" rx="3" fill="#2f81f7"/>
+<text x="657.8" y="104" font-size="12" fill="#8b949e">1,214</text>
+<text x="180" y="133" font-size="12" text-anchor="end" fill="#8b949e">geesefs-tuned</text>
+<rect x="190" y="121" width="244.3" height="18" rx="3" fill="#3fb950"/>
+<text x="442.3" y="134" font-size="12" fill="#8b949e">645</text>
+<text x="180" y="163" font-size="12" text-anchor="end" fill="#8b949e">geesefs-default</text>
+<rect x="190" y="151" width="163.2" height="18" rx="3" fill="#3fb950"/>
+<text x="361.2" y="164" font-size="12" fill="#8b949e">431</text>
+<text x="180" y="193" font-size="12" text-anchor="end" fill="#8b949e">lustre</text>
+<rect x="190" y="181" width="126.8" height="18" rx="3" fill="#8b949e"/>
+<text x="324.8" y="194" font-size="12" fill="#8b949e">335</text>
+<text x="180" y="223" font-size="12" text-anchor="end" fill="#8b949e">local-nvme</text>
+<rect x="190" y="211" width="69.7" height="18" rx="3" fill="#8b949e"/>
+<text x="267.7" y="224" font-size="12" fill="#8b949e">184</text>
+<text x="180" y="253" font-size="12" text-anchor="end" fill="#8b949e">s3fs-tuned</text>
+<rect x="190" y="241" width="64.7" height="18" rx="3" fill="#db6d28"/>
+<text x="262.7" y="254" font-size="12" fill="#8b949e">171</text>
+<text x="180" y="283" font-size="12" text-anchor="end" fill="#8b949e">s3fs-default</text>
+<rect x="190" y="271" width="48.2" height="18" rx="3" fill="#db6d28"/>
+<text x="246.2" y="284" font-size="12" fill="#8b949e">127</text>
+<text x="180" y="313" font-size="12" text-anchor="end" fill="#8b949e">rclone-tuned</text>
+<rect x="190" y="301" width="37.7" height="18" rx="3" fill="#a371f7"/>
+<text x="235.7" y="314" font-size="12" fill="#8b949e">100</text>
+<text x="180" y="343" font-size="12" text-anchor="end" fill="#8b949e">rclone-default</text>
+<rect x="190" y="331" width="25.0" height="18" rx="3" fill="#a371f7"/>
+<text x="223.0" y="344" font-size="12" fill="#8b949e">66</text>
+<text x="14" y="380" font-size="11" fill="#8b949e">local-nvme shown as end-to-end (download + read), not its local SSD read speed</text>
+</svg>

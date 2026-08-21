@@ -138,14 +138,32 @@ make up NODE_TYPE=m5dn.8xlarge   # 25 Gbps sustained, needs a 32 vCPU quota
 
 ## Known constraints in this account
 
-- **Standard EC2 vCPU quota is 8**, which caps the node at 8 vCPU. A raise to 64
-  has been requested and is pending; until it lands, sustained-bandwidth types
-  are unavailable.
-- **Terraform runs as the account root user**, which is why the cluster uses
-  `API_AND_CONFIG_MAP` auth: EKS access entries do not accept a root principal,
-  and roles cannot be assumed by root. Creating a dedicated IAM user for this
-  work would be better practice and would let the cluster use the modern
-  `API` auth mode.
+These were hit for real while building this, not anticipated on paper.
+
+- **Standard EC2 vCPU quota is 8**, capping the node at 8 vCPU. Increases to 64
+  (Standard) and 32 (G/VT) were requested and are still `CASE_OPENED`. Until
+  they land, sustained-bandwidth instance types are unavailable, and the
+  measured S3 ceiling on `m5dn.2xlarge` is about **1114 MB/s (8.9 Gbit/s)**.
+
+  This matters for interpretation: Mountpoint already reaches ~95% of that
+  ceiling, and `bw_in_allowance_exceeded` fires during its runs. On this node
+  the fastest clients are limited by the instance, not by the filesystem, so
+  the gaps among them are compressed and should not be read as a ranking. The
+  slower clients (s3fs, rclone) are nowhere near the ceiling, so their numbers
+  are genuine.
+
+- **Node group updates deadlock under that quota.** An in-place managed node
+  group update launches the replacement node before draining the old one, which
+  needs double the vCPUs. With one 8 vCPU node against an 8 vCPU quota it fails
+  with `VcpuLimitExceeded` and eventually `NodeCreationFailure`. The node group
+  name therefore hashes its bootstrap config so that changes destroy-then-create.
+
+- **Terraform runs as the account root user.** Hence `API_AND_CONFIG_MAP` auth:
+  EKS access entries reject a root principal, and `sts:AssumeRole` is refused
+  outright for root ("Roles may not be assumed by root accounts"), so a
+  provider-level `assume_role` workaround is not available either. Creating a
+  dedicated IAM user for this work would be better practice and would allow the
+  modern `API` auth mode.
 
 ## Layout
 

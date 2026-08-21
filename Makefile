@@ -83,7 +83,7 @@ corpus: ## Generate the test corpus in S3 (CORPUS_PROFILE=dev|prod)
 	envsubst < k8s/corpus-job.yaml.tpl | kubectl apply -f - ; \
 	echo "waiting for node to be ready..."; \
 	kubectl wait --for=condition=Ready node -l workload=benchmark --timeout=600s; \
-	kubectl wait --for=condition=Ready pod -l app=s3fuse-corpus --timeout=600s || true; \
+	kubectl wait --for=condition=Ready pod -l job-name=corpus-$(RUN_ID) --timeout=600s || true; \
 	kubectl logs -f job/corpus-$(RUN_ID)
 
 bench: ## Run the benchmark (RUN_PROFILE=dev|prod, CLIENTS=comma,list)
@@ -93,7 +93,7 @@ bench: ## Run the benchmark (RUN_PROFILE=dev|prod, CLIENTS=comma,list)
 	export BUCKET=$$($(TF_CLUSTER) output -raw bucket); \
 	export REGION=$(REGION) RUN_PROFILE=$(RUN_PROFILE) CLIENTS="$(CLIENTS)" RUN_ID=$(RUN_ID); \
 	envsubst < k8s/bench-job.yaml.tpl | kubectl apply -f - ; \
-	kubectl wait --for=condition=Ready pod -l app=s3fuse-bench --timeout=600s || true; \
+	kubectl wait --for=condition=Ready pod -l job-name=bench-$(RUN_ID) --timeout=600s || true; \
 	kubectl logs -f job/bench-$(RUN_ID); \
 	echo; echo "run id: $(RUN_ID)"; \
 	$(MAKE) --no-print-directory results RUN_ID=$(RUN_ID)
@@ -118,8 +118,12 @@ status: ## Show what is currently running and what it costs
 	@$(TF_CLUSTER) output 2>/dev/null || echo "cluster not deployed"
 	@echo; kubectl get nodes,pods 2>/dev/null || true
 
-logs: ## Tail the most recent benchmark pod
-	kubectl logs -f -l app=s3fuse-bench --tail=200
+logs: ## Tail the benchmark pod for RUN_ID
+	kubectl logs -f job/bench-$(RUN_ID) --tail=200
+
+clean-jobs: ## Remove completed corpus/benchmark jobs
+	kubectl delete job -l app=s3fuse-bench --ignore-not-found
+	kubectl delete job --field-selector status.successful=1 --ignore-not-found
 
 shell: ## Interactive shell on the benchmark node (for manual poking)
 	kubectl run bench-shell --rm -it --restart=Never \
@@ -133,4 +137,4 @@ down: ## Destroy the cluster and node. Keeps the corpus bucket.
 nuke: down ## Destroy everything, including the corpus bucket
 	$(TF_DATA) destroy -auto-approve -var region=$(REGION) -var aws_profile=$(AWS_PROFILE)
 
-.PHONY: help init data up kubeconfig image corpus bench results report status logs shell down nuke
+.PHONY: help init data up kubeconfig image corpus bench results report status logs clean-jobs shell down nuke

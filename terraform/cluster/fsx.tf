@@ -84,6 +84,12 @@ resource "aws_fsx_data_repository_association" "corpus" {
   data_repository_path = "s3://${data.terraform_remote_state.data.outputs.bucket}"
   file_system_path     = "/corpus"
 
+  # Import metadata for objects that already exist in the bucket. Without this
+  # the association only picks up objects written after it was created, so a
+  # corpus generated beforehand is simply invisible under the mount and the
+  # Lustre client silently drops out of the comparison.
+  batch_import_meta_data_on_create = true
+
   s3 {
     auto_import_policy {
       events = ["NEW", "CHANGED", "DELETED"]

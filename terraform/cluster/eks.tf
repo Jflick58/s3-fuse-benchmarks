@@ -77,8 +77,17 @@ resource "aws_launch_template" "node" {
 }
 
 resource "aws_eks_node_group" "bench" {
-  cluster_name    = aws_eks_cluster.this.name
-  node_group_name = "bench"
+  cluster_name = aws_eks_cluster.this.name
+
+  # The name embeds a hash of the node's bootstrap configuration so that any
+  # change to it replaces the node group rather than rolling it in place.
+  #
+  # This is not cosmetic. An in-place managed node group update always launches
+  # the replacement node before draining the old one, which needs double the
+  # vCPUs. With a single 8 vCPU node against an 8 vCPU account quota that can
+  # never succeed, and the update deadlocks on VcpuLimitExceeded until it times
+  # out. Destroy-then-create only ever needs one node's worth of quota.
+  node_group_name = "bench-${substr(sha256(local.user_data_mime), 0, 8)}"
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = [aws_subnet.public[0].id]
 

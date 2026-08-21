@@ -86,6 +86,11 @@ corpus: ## Generate the test corpus in S3 (CORPUS_PROFILE=dev|prod)
 	kubectl wait --for=condition=Ready pod -l job-name=corpus-$(RUN_ID) --timeout=600s || true; \
 	kubectl logs -f job/corpus-$(RUN_ID)
 
+# The log stream is followed in a reconnect loop rather than a single
+# `kubectl logs -f`. A prod run lasts hours and will outlive one watch
+# connection; when that connection drops, kubectl exits non-zero and the old
+# recipe aborted the target and skipped result collection, even though the Job
+# was still running perfectly well in the cluster.
 bench: ## Run the benchmark (RUN_PROFILE=dev|prod, CLIENTS=comma,list)
 	$(call need_cluster)
 	@set -euo pipefail; \
@@ -94,7 +99,12 @@ bench: ## Run the benchmark (RUN_PROFILE=dev|prod, CLIENTS=comma,list)
 	export REGION=$(REGION) RUN_PROFILE=$(RUN_PROFILE) CLIENTS="$(CLIENTS)" RUN_ID=$(RUN_ID); \
 	envsubst < k8s/bench-job.yaml.tpl | kubectl apply -f - ; \
 	kubectl wait --for=condition=Ready pod -l job-name=bench-$(RUN_ID) --timeout=600s || true; \
-	kubectl logs -f job/bench-$(RUN_ID); \
+	while true; do \
+	  kubectl logs -f job/bench-$(RUN_ID) --since=5s 2>/dev/null || true; \
+	  if kubectl get job bench-$(RUN_ID) -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then break; fi; \
+	  if kubectl get job bench-$(RUN_ID) -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then echo "JOB FAILED"; break; fi; \
+	  sleep 5; \
+	done; \
 	echo; echo "run id: $(RUN_ID)"; \
 	$(MAKE) --no-print-directory results RUN_ID=$(RUN_ID)
 

@@ -43,9 +43,12 @@ RUN_PROFILES = {
     "prod": {
         "reps": 3,
         # Cap how much of a very large file the sequential workload reads.
-        # Steady state is reached within a few GiB; reading all 100 GiB three
-        # times per client would add hours of runtime and change no conclusion.
-        "seq_max_bytes": 20 * GIB,
+        # Steady state is reached within a few GiB, so this is about runtime,
+        # not fidelity: the slowest clients move ~100 MB/s, where every extra
+        # GiB costs ten seconds per repetition per client. Random-seek validity
+        # depends on the FILE being larger than RAM (it is, at 100 GB), not on
+        # how much of it the sequential workload reads.
+        "seq_max_bytes": 12 * GIB,
         "parallel_streams": 4,
         "random_reads": 200,
         "random_read_size": 8 * MIB,

@@ -122,20 +122,6 @@ All of these actually bit during the build.
   lost`, which used to abort `make bench` and skip collecting results while the Job carried
   on running fine.
 
-## Files
-
-- `terraform/data/`, the corpus bucket. Separate state on purpose so `make down` can't
-  delete it.
-- `terraform/cluster/`, VPC (S3 gateway endpoint, no NAT), EKS, node group, ECR, optional FSx.
-- `image/Dockerfile`, every client in one image so distro differences can't show up as I/O
-  differences.
-- `bench/clients.py`, mount and unmount plus the exact flags per candidate, default and tuned.
-- `bench/workloads.py`, the five measurements.
-- `bench/metrics.py`, CPU and RSS sampling, page cache dropping, ENA allowance counters.
-- `bench/harness.py`, the orchestrator. Smoke-tests every client before measuring anything.
-- `bench/report.py` and `bench/chart.py`, jsonl to markdown and jsonl to svg.
-- `k8s/*.tpl`, the corpus and benchmark Jobs.
-
 ## Cost
 
 $0.644/hr while running (node $0.544, EKS control plane $0.100), plus $0.23/hr with Lustre.
